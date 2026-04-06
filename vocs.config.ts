@@ -319,6 +319,10 @@ export default defineConfig({
             text: "Proxy an existing service",
             link: "/guides/proxy-existing-service",
           },
+          {
+            text: "Upgrade your x402 integration",
+            link: "/guides/upgrade-x402",
+          },
         ],
       },
       {
