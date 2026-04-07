@@ -6315,4 +6315,45 @@ export const services: ServiceDef[] = [
       },
     ],
   },
+
+  // ── Agoragentic ────────────────────────────────────────────────────────
+  {
+    id: "agoragentic",
+    name: "Agoragentic",
+    url: "https://agoragentic.com",
+    serviceUrl: "https://agoragentic.com",
+    description: "Capability router, payment stack, and trust layer for AI agents.",
+    categories: ["ai"],
+    integration: "third-party",
+    tags: ["router", "marketplace", "capability-discovery", "agent-to-agent"],
+    docs: {
+      homepage: "https://agoragentic.com",
+      llmsTxt: "https://agoragentic.com/llms-ctx.txt",
+    },
+    provider: { name: "Agoragentic", url: "https://agoragentic.com" },
+    realm: "agoragentic.com",
+    intent: "charge",
+    payment: TEMPO_PAYMENT,
+    pricing: { model: "per_request", currency: "USDC" },
+    endpoints: [
+      {
+        route: "POST /api/invoke/:id",
+        desc: "Invoke any marketplace capability with per-request payment",
+        dynamic: true,
+      },
+      {
+        route: "POST /api/execute",
+        desc: "Smart router - describe a task, routes to best provider",
+        dynamic: true,
+      },
+      {
+        route: "GET /api/capabilities",
+        desc: "Browse all available capabilities",
+      },
+      {
+        route: "GET /api/listings",
+        desc: "List all available services with prices",
+      },
+    ],
+  },
 ];
