@@ -6326,12 +6326,7 @@ export const services: ServiceDef[] = [
       "Capability router, payment stack, and trust layer for AI agents.",
     categories: ["ai"],
     integration: "third-party",
-    tags: [
-      "router",
-      "marketplace",
-      "capability-discovery",
-      "agent-to-agent",
-    ],
+    tags: ["router", "marketplace", "capability-discovery", "agent-to-agent"],
     docs: {
       homepage: "https://agoragentic.com",
       llmsTxt: "https://agoragentic.com/llms-ctx.txt",
