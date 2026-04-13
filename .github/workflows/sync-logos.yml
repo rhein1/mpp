@@ -25,13 +25,37 @@ jobs:
       - name: Sync logos to Vercel Blob
         id: sync
         run: |
+          MISSING=()
+          if [ -z "$BLOB_READ_WRITE_TOKEN" ]; then
+            MISSING+=("BLOB_READ_WRITE_TOKEN")
+          fi
+          if [ -z "$LOGODEV_PUBLIC_KEY" ]; then
+            MISSING+=("LOGODEV_PUBLIC_KEY or BRANDDEV_LOGOLINK_KEY")
+          fi
+
+          if [ "${#MISSING[@]}" -gt 0 ]; then
+            MISSING_JSON=$(printf '%s\n' "${MISSING[@]}" | jq -R . | jq -sc .)
+            SUMMARY=$(jq -cn --argjson missing "$MISSING_JSON" '{total: 0, synced: 0, failed: 0, placeholders: 0, skipped: true, reason: "missing_secrets", missingSecrets: $missing}')
+            echo "::warning::Skipping logo sync because required secrets are missing: ${MISSING[*]}"
+            echo "$SUMMARY"
+            echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          set +e
           OUTPUT=$(node scripts/sync-logos.ts 2>&1)
+          STATUS=$?
+          set -e
           echo "$OUTPUT"
           SUMMARY=$(echo "$OUTPUT" | tail -1)
+          if ! echo "$SUMMARY" | jq -e . > /dev/null 2>&1; then
+            SUMMARY=$(jq -cn --arg details "$SUMMARY" '{total: 0, synced: 0, failed: 1, placeholders: 0, skipped: false, reason: "sync_script_failed", details: $details}')
+          fi
           echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+          exit "$STATUS"
         env:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          LOGODEV_PUBLIC_KEY: ${{ secrets.LOGODEV_PUBLIC_KEY }}
+          LOGODEV_PUBLIC_KEY: ${{ secrets.LOGODEV_PUBLIC_KEY || secrets.BRANDDEV_LOGOLINK_KEY }}
       - name: Post job summary
         if: always()
         run: |
@@ -40,6 +64,9 @@ jobs:
           SYNCED=$(echo "$SUMMARY" | jq -r '.synced // 0')
           TOTAL=$(echo "$SUMMARY" | jq -r '.total // 0')
           PLACEHOLDERS=$(echo "$SUMMARY" | jq -r '.placeholders // 0')
+          SKIPPED=$(echo "$SUMMARY" | jq -r '.skipped // false')
+          REASON=$(echo "$SUMMARY" | jq -r '.reason // ""')
+          MISSING=$(echo "$SUMMARY" | jq -r '(.missingSecrets // []) | join(", ")')
           echo "## 🖼️ Logo Sync Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Metric | Count |" >> "$GITHUB_STEP_SUMMARY"
@@ -48,11 +75,20 @@ jobs:
           echo "| ✅ Synced | $SYNCED |" >> "$GITHUB_STEP_SUMMARY"
           echo "| ⚠️ Placeholders | $PLACEHOLDERS |" >> "$GITHUB_STEP_SUMMARY"
           echo "| ❌ Failed | $FAILED |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SKIPPED" = "true" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> Skipped logo sync: $REASON ($MISSING)." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Fail if icons failed
         if: always()
         run: |
           SUMMARY='${{ steps.sync.outputs.summary }}'
           FAILED=$(echo "$SUMMARY" | jq -r '.failed // 0')
+          SKIPPED=$(echo "$SUMMARY" | jq -r '.skipped // false')
+          if [ "$SKIPPED" = "true" ]; then
+            echo "::notice::Logo sync skipped by configuration"
+            exit 0
+          fi
           if [ "$FAILED" -gt 0 ]; then
             echo "::error::$FAILED icon(s) failed to sync"
             exit 1

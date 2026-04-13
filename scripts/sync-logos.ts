@@ -34,9 +34,10 @@ if (!BLOB_TOKEN) {
   process.exit(1);
 }
 
-const LOGODEV_PK = process.env.LOGODEV_PUBLIC_KEY;
+const LOGODEV_PK =
+  process.env.LOGODEV_PUBLIC_KEY ?? process.env.BRANDDEV_LOGOLINK_KEY;
 if (!LOGODEV_PK) {
-  console.error("LOGODEV_PUBLIC_KEY is required");
+  console.error("LOGODEV_PUBLIC_KEY or BRANDDEV_LOGOLINK_KEY is required");
   process.exit(1);
 }
 
