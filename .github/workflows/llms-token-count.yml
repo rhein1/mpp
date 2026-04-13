@@ -23,7 +23,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "pnpm"
 
       - run: pnpm install --frozen-lockfile
@@ -55,38 +55,54 @@ jobs:
             const threshold = Number('${{ env.TOKEN_THRESHOLD }}');
             const title = `llms-full.txt exceeds ${threshold.toLocaleString()} token threshold`;
 
-            const { data: issues } = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'llms-token-count',
-            });
+            const reportIssuesDisabled = async (action) => {
+              core.warning(`GitHub Issues are disabled for ${context.repo.owner}/${context.repo.repo}; skipped ${action}.`);
+              await core.summary
+                .addHeading('llms-full.txt issue alert skipped', 3)
+                .addRaw(`GitHub Issues are disabled for this repository; skipped ${action}.`, true)
+                .write();
+            };
 
-            const existing = issues.find(i => i.title === title);
-            if (existing) {
-              await github.rest.issues.createComment({
+            try {
+              const { data: issues } = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: existing.number,
-                body: `Updated count: **${tokenCount.toLocaleString()}** tokens (threshold: ${threshold.toLocaleString()})`,
+                state: 'open',
+                labels: 'llms-token-count',
               });
-              return;
-            }
 
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body: [
-                `\`llms-full.txt\` has **${tokenCount.toLocaleString()}** tokens (threshold: ${threshold.toLocaleString()}).`,
-                '',
-                'Large context files degrade LLM performance and increase costs. Consider:',
-                '- Removing redundant or templated content',
-                '- Splitting into focused `llms.txt` sections',
-                '- Trimming verbose code examples',
-              ].join('\n'),
-              labels: ['llms-token-count'],
-            });
+              const existing = issues.find(i => i.title === title);
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existing.number,
+                  body: `Updated count: **${tokenCount.toLocaleString()}** tokens (threshold: ${threshold.toLocaleString()})`,
+                });
+                return;
+              }
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: [
+                  `\`llms-full.txt\` has **${tokenCount.toLocaleString()}** tokens (threshold: ${threshold.toLocaleString()}).`,
+                  '',
+                  'Large context files degrade LLM performance and increase costs. Consider:',
+                  '- Removing redundant or templated content',
+                  '- Splitting into focused `llms.txt` sections',
+                  '- Trimming verbose code examples',
+                ].join('\n'),
+                labels: ['llms-token-count'],
+              });
+            } catch (error) {
+              if (error.status === 410) {
+                await reportIssuesDisabled('creating or updating the token-count issue');
+                return;
+              }
+              throw error;
+            }
 
       - name: Close issue if back under threshold
         if: steps.count.outputs.over_threshold == 'false'
@@ -96,24 +112,40 @@ jobs:
             const tokenCount = Number('${{ steps.count.outputs.token_count }}');
             const threshold = Number('${{ env.TOKEN_THRESHOLD }}');
 
-            const { data: issues } = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'llms-token-count',
-            });
+            const reportIssuesDisabled = async (action) => {
+              core.warning(`GitHub Issues are disabled for ${context.repo.owner}/${context.repo.repo}; skipped ${action}.`);
+              await core.summary
+                .addHeading('llms-full.txt issue alert skipped', 3)
+                .addRaw(`GitHub Issues are disabled for this repository; skipped ${action}.`, true)
+                .write();
+            };
 
-            for (const issue of issues) {
-              await github.rest.issues.createComment({
+            try {
+              const { data: issues } = await github.rest.issues.listForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `Resolved: **${tokenCount.toLocaleString()}** tokens (under ${threshold.toLocaleString()} threshold). Closing.`,
+                state: 'open',
+                labels: 'llms-token-count',
               });
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                state: 'closed',
-              });
+
+              for (const issue of issues) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `Resolved: **${tokenCount.toLocaleString()}** tokens (under ${threshold.toLocaleString()} threshold). Closing.`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                });
+              }
+            } catch (error) {
+              if (error.status === 410) {
+                await reportIssuesDisabled('closing token-count issues');
+                return;
+              }
+              throw error;
             }
